@@ -6,7 +6,26 @@ Licensed retailers order from Taneja's warehouse; Taneja is the only fulfilment 
 
 ## Status
 
-Phase 1 (foundation) of the [build sequence](prompts/02_BUILD_SEQUENCE.md): API skeleton, environment validation, migrations, audit log, structured logging with redaction, stable error codes, health checks, checkout/COD rules and CI. No retailer-facing features yet.
+- Phase 1 (foundation): API skeleton, environment validation, migrations, audit log, structured logging with redaction, stable error codes, health checks, checkout/COD rules and CI.
+- Phase 2 (auth/roles): phone OTP login, sessions, `/me`, the PRD's staff roles, and super-admin user management. SMS is a development stub that prints codes to the server log; staging/production refuse to start until a real SMS/DLT provider is added.
+
+No retailer-facing screens yet.
+
+## API so far
+
+| Method | Path | Who |
+| --- | --- | --- |
+| GET | `/health`, `/health/ready` | anyone |
+| POST | `/auth/otp/request` `{phone}` | anyone (rate limited) |
+| POST | `/auth/otp/verify` `{phone, code}` → `{token, user, roles}` | anyone |
+| POST | `/auth/logout` | logged in |
+| GET, PATCH | `/me` (name, language `en`/`hi`) | logged in |
+| GET, POST | `/admin/users` | super_admin |
+| GET | `/admin/users/:id` | super_admin |
+| POST, DELETE | `/admin/users/:id/roles[/:role]` | super_admin (audited) |
+| POST | `/admin/users/:id/status` | super_admin (audited) |
+
+Send the token as `Authorization: Bearer <token>`.
 
 ## Stack
 
@@ -25,8 +44,11 @@ docker compose up -d            # Postgres with taneja_dev and taneja_test datab
 npm install
 cp apps/api/.env.example apps/api/.env
 npm run db:migrate -w @taneja/api
+npm run user:grant -w @taneja/api -- 9876543210 super_admin   # first admin
 npm run dev -w @taneja/api      # http://localhost:3000/health
 ```
+
+In development, OTP codes appear in the server log as `[DEV SMS - NOT SENT]`.
 
 Run checks:
 

@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "db:migrate": "tsx --conditions=source src/migrate-cli.ts"
+    "db:migrate": "tsx --conditions=source src/migrate-cli.ts",
+    "user:grant": "tsx --conditions=source src/cli/grant-role.ts"
   },
   "dependencies": {
     "@taneja/domain": "0.1.0",

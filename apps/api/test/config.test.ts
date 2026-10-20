@@ -12,12 +12,26 @@ describe('loadConfig', () => {
       logLevel: 'info',
       databaseUrl: base.DATABASE_URL,
       databaseSsl: false,
+      otpPepper: expect.any(String),
+      smsProvider: 'dev_console',
+      sessionTtlDays: 30,
     });
   });
 
   it('parses explicit values', () => {
-    const config = loadConfig({ ...base, NODE_ENV: 'production', PORT: '8080', DATABASE_SSL: 'true', LOG_LEVEL: 'warn' });
-    expect(config).toMatchObject({ env: 'production', port: 8080, databaseSsl: true, logLevel: 'warn' });
+    const config = loadConfig({ ...base, NODE_ENV: 'test', PORT: '8080', DATABASE_SSL: 'true', LOG_LEVEL: 'warn' });
+    expect(config).toMatchObject({ env: 'test', port: 8080, databaseSsl: true, logLevel: 'warn' });
+  });
+
+  it('requires a real OTP pepper and refuses the dev SMS sender in staging and production', () => {
+    for (const NODE_ENV of ['staging', 'production']) {
+      expect(() => loadConfig({ ...base, NODE_ENV })).toThrow(/OTP_PEPPER: required/);
+      expect(() => loadConfig({ ...base, NODE_ENV, OTP_PEPPER: 'x'.repeat(40) })).toThrow(/dev_console/);
+    }
+  });
+
+  it('rejects a short OTP pepper', () => {
+    expect(() => loadConfig({ ...base, OTP_PEPPER: 'short' })).toThrow(/at least 32/);
   });
 
   it('fails fast listing every problem', () => {

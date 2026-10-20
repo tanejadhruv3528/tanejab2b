@@ -32,3 +32,4 @@ Build a secure B2B ordering and distribution platform for Taneja Drug Agency. Re
 ## Commands
 - `npm install`, `npm run typecheck`, `npm test`
 - `npm run db:migrate -w @taneja/api`, `npm run dev -w @taneja/api`
+- `npm run user:grant -w @taneja/api -- <mobile> <role>` to bootstrap staff roles
