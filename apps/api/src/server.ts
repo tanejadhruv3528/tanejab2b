@@ -4,6 +4,7 @@ import { loadConfig } from './config.js';
 import { createPool } from './db.js';
 import { loadDotEnv } from './env-file.js';
 import { loggerOptions } from './logger.js';
+import { LocalDiskDocumentStore } from './storage.js';
 
 loadDotEnv();
 const config = loadConfig();
@@ -11,6 +12,7 @@ const db = createPool(config);
 const app = await buildApp({
   db,
   sms: new DevConsoleSmsSender(),
+  documents: new LocalDiskDocumentStore(config.documentStorageDir),
   otpPepper: config.otpPepper,
   sessionTtlDays: config.sessionTtlDays,
   logger: loggerOptions(config),

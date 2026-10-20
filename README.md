@@ -8,6 +8,7 @@ Licensed retailers order from Taneja's warehouse; Taneja is the only fulfilment 
 
 - Phase 1 (foundation): API skeleton, environment validation, migrations, audit log, structured logging with redaction, stable error codes, health checks, checkout/COD rules and CI.
 - Phase 2 (auth/roles): phone OTP login, sessions, `/me`, the PRD's staff roles, and super-admin user management. SMS is a development stub that prints codes to the server log; staging/production refuse to start until a real SMS/DLT provider is added.
+- Phase 3 (retailer onboarding/KYC): business, store address with map pin, drug licence and GSTIN details; private licence/store-photo uploads; submit for review; reviewer queue, audited document viewing, and decisions (approve, send back, reject, suspend, reinstate). Approval requires a verified store and an unexpired licence, and grants the retailer role for that account. Files are stored on local disk in development only; staging/production refuse to start until a private storage bucket is configured.
 
 No retailer-facing screens yet.
 
@@ -24,6 +25,13 @@ No retailer-facing screens yet.
 | GET | `/admin/users/:id` | super_admin |
 | POST, DELETE | `/admin/users/:id/roles[/:role]` | super_admin (audited) |
 | POST | `/admin/users/:id/status` | super_admin (audited) |
+| GET, PUT | `/retailer/onboarding` | logged in (own account only) |
+| POST | `/retailer/kyc/documents/:kind` (raw JPEG/PNG/PDF body, max 5 MB) | logged in, while editable |
+| POST | `/retailer/kyc/submit` | logged in |
+| GET | `/retailer/kyc/status` | logged in |
+| GET | `/admin/kyc/queue`, `/admin/kyc/:accountId` | kyc_reviewer, super_admin |
+| GET | `/admin/kyc/:accountId/documents/:documentId` | kyc_reviewer, super_admin (every view audited) |
+| POST | `/admin/kyc/:accountId/decision` | kyc_reviewer, super_admin (audited) |
 
 Send the token as `Authorization: Bearer <token>`.
 
