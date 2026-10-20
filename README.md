@@ -11,6 +11,7 @@ Licensed retailers order from Taneja's warehouse; Taneja is the only fulfilment 
 - Phase 3 (retailer onboarding/KYC): business, store address with map pin, drug licence and GSTIN details; private licence/store-photo uploads; submit for review; reviewer queue, audited document viewing, and decisions (approve, send back, reject, suspend, reinstate). Approval requires a verified store and an unexpired licence, and grants the retailer role for that account. Files are stored on local disk in development only; staging/production refuse to start until a private storage bucket is configured.
 - Phase 4 (catalogue): CSV import from authorised sources only (Marg export, manufacturer/distributor lists, manual entry) with dry-run validation, whole-file rejection on any error, upsert by SKU and import history; typo-tolerant search by brand, salt, manufacturer, strength, SKU and aliases (incl. Hindi); restricted, cold-chain and schedule flags. Search results carry an availability status.
 - Phase 5 (inventory): stock snapshots by batch (expiry, MRP, rate, location) imported as CSV from a Marg export or a manual count; dry run, whole-file rejection, older exports cannot overwrite newer ones, unknown SKUs and oversold batches reported. Availability (in stock / low / out / restricted / discontinued) and last-sync time with a stale flag on every product; exact quantities only for staff. Earliest-expiry-first reservation with row locks so concurrent orders cannot take the same last unit; batches inside the minimum shelf life are not sold. Every movement is logged. The real Marg export column layout still needs a sample file.
+- Phase 6 (cart and pricing): one server-side cart per approved retailer; quotes priced from the earliest-expiry sellable batches at Taneja's selling rate, GST added per line (rates are assumed GST-exclusive until checked against Marg invoices), ₹50 delivery, ₹3,000 minimum and COD eligibility (blocked above ₹10,000, outside service zones or when disabled by admin). Restricted, discontinued, cold-chain, untaxed, unpriced and short-stock lines are shown with a reason and block checkout, never silently dropped. Quotes are stored for 15 minutes so checkout can charge the price shown. Order-value discount slabs can be drafted and activated (super admin, audited) but stay off globally until the owner confirms the rates.
 
 No retailer-facing screens yet.
 
@@ -41,6 +42,12 @@ No retailer-facing screens yet.
 | POST | `/admin/inventory/imports?source=&asOf=&dryRun=` (text/csv body) | catalog_operator, super_admin (audited) |
 | GET | `/admin/inventory/imports` | catalog_operator, super_admin |
 | GET | `/admin/inventory/products/:productId` (batches) | warehouse, procurement, support, catalogue staff |
+| GET, DELETE | `/cart` | approved retailers (own cart) |
+| PUT | `/cart/items/:productId` `{quantity}` (0 removes) | approved retailers |
+| POST | `/cart/quote` → stored quote with expiry | approved retailers |
+| GET | `/admin/pricing/rules` | super_admin, catalog_operator, finance_admin |
+| POST | `/admin/pricing/rules` (draft slab) | super_admin, catalog_operator (audited) |
+| POST | `/admin/pricing/rules/:id/status` (activate/retire + reason) | super_admin (audited) |
 
 Catalogue CSV columns: `sku,name,manufacturer` required; optional `generic_name,strength,dosage_form,pack_size,hsn_code,gst_rate,mrp,schedule,cold_chain,status,aliases` (aliases separated by `|`).
 
