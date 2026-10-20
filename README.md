@@ -9,6 +9,7 @@ Licensed retailers order from Taneja's warehouse; Taneja is the only fulfilment 
 - Phase 1 (foundation): API skeleton, environment validation, migrations, audit log, structured logging with redaction, stable error codes, health checks, checkout/COD rules and CI.
 - Phase 2 (auth/roles): phone OTP login, sessions, `/me`, the PRD's staff roles, and super-admin user management. SMS is a development stub that prints codes to the server log; staging/production refuse to start until a real SMS/DLT provider is added.
 - Phase 3 (retailer onboarding/KYC): business, store address with map pin, drug licence and GSTIN details; private licence/store-photo uploads; submit for review; reviewer queue, audited document viewing, and decisions (approve, send back, reject, suspend, reinstate). Approval requires a verified store and an unexpired licence, and grants the retailer role for that account. Files are stored on local disk in development only; staging/production refuse to start until a private storage bucket is configured.
+- Phase 4 (catalogue): CSV import from authorised sources only (Marg export, manufacturer/distributor lists, manual entry) with dry-run validation, whole-file rejection on any error, upsert by SKU and import history; typo-tolerant search by brand, salt, manufacturer, strength, SKU and aliases (incl. Hindi); restricted, cold-chain and schedule flags. Stock availability stays `null` until the inventory phase.
 
 No retailer-facing screens yet.
 
@@ -32,6 +33,12 @@ No retailer-facing screens yet.
 | GET | `/admin/kyc/queue`, `/admin/kyc/:accountId` | kyc_reviewer, super_admin |
 | GET | `/admin/kyc/:accountId/documents/:documentId` | kyc_reviewer, super_admin (every view audited) |
 | POST | `/admin/kyc/:accountId/decision` | kyc_reviewer, super_admin (audited) |
+| GET | `/catalog/search?q=`, `/catalog/products/:id` | approved retailers, staff |
+| POST | `/admin/catalog/imports?source=&dryRun=` (text/csv body) | catalog_operator, super_admin |
+| GET | `/admin/catalog/imports` | catalog_operator, super_admin |
+| PATCH | `/admin/catalog/products/:id` (status + reason) | catalog_operator, super_admin (audited) |
+
+Catalogue CSV columns: `sku,name,manufacturer` required; optional `generic_name,strength,dosage_form,pack_size,hsn_code,gst_rate,mrp,schedule,cold_chain,status,aliases` (aliases separated by `|`).
 
 Send the token as `Authorization: Bearer <token>`.
 
