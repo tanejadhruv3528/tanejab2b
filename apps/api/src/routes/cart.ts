@@ -1,17 +1,20 @@
 import type { FastifyInstance } from 'fastify';
 import { clearCart, createQuote, priceCart, setCartItem } from '../cart.js';
 import type { Db } from '../db.js';
+import type { PaymentProvider } from '../payments.js';
 import { AppError } from '../errors.js';
 import { retailerAccountIdOf } from '../retailer-context.js';
 
 const MAX_CART_LINES = 300;
 
-export async function cartRoutes(app: FastifyInstance, opts: { db: Db }): Promise<void> {
+export async function cartRoutes(app: FastifyInstance, opts: { db: Db; payments: PaymentProvider }): Promise<void> {
   const { db } = opts;
+  // Lets the app hide online payment until a provider is configured.
+  const onlinePaymentAvailable = opts.payments.enabled;
 
   app.get('/cart', async (request) => {
     const accountId = retailerAccountIdOf(request);
-    return { cart: await priceCart(db, accountId) };
+    return { cart: await priceCart(db, accountId), onlinePaymentAvailable };
   });
 
   app.put<{ Params: { productId: string }; Body: { quantity: number } }>(
@@ -48,7 +51,7 @@ export async function cartRoutes(app: FastifyInstance, opts: { db: Db }): Promis
         }
       }
       await setCartItem(db, accountId, productId, quantity);
-      return { cart: await priceCart(db, accountId) };
+      return { cart: await priceCart(db, accountId), onlinePaymentAvailable };
     },
   );
 

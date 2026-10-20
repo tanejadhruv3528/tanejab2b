@@ -9,7 +9,7 @@ type Handler = (body: unknown) => { status?: number; json?: unknown };
 
 /** Routes fetch calls to handlers keyed by "METHOD /path" and records what was sent. */
 function mockApi(routes: Record<string, Handler>) {
-  const calls: { key: string; body: unknown; auth: string | null }[] = [];
+  const calls: { key: string; body: unknown; auth: string | null; idem: string | null }[] = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init: RequestInit) => {
@@ -17,7 +17,7 @@ function mockApi(routes: Record<string, Handler>) {
       const key = `${init.method} ${path}`;
       const headers = init.headers as Record<string, string>;
       const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
-      calls.push({ key, body, auth: headers.authorization ?? null });
+      calls.push({ key, body, auth: headers.authorization ?? null, idem: headers['idempotency-key'] ?? null });
       const handler = routes[key];
       const res = handler ? handler(body) : { status: 404, json: { error: { code: 'NOT_FOUND', message: key } } };
       const status = res.status ?? 200;
@@ -163,6 +163,53 @@ describe('retailer app', () => {
     expect(screen.getByText('₹2,178.00')).toBeTruthy();
     const checkout = screen.getByRole('button', { name: 'Checkout' }) as HTMLButtonElement;
     expect(checkout.disabled).toBe(true);
+  });
+
+  it('places a COD order with an idempotency key and opens it', async () => {
+    localStorage.setItem('taneja.token', 'tok');
+    const line = { productId: 'p1', sku: 'P1', name: 'Dolo 650', manufacturer: 'Micro Labs', packSize: null, quantity: 100, issues: [], stockStale: false, pricing: { valuePaise: 300000, discountPaise: 0, taxPaise: 36000, totalPaise: 336000, gstRateBps: 1200 } };
+    const ready = cart(
+      { lines: [line], subtotalPaise: 300000, taxPaise: 36000, canCheckout: true },
+      { payablePaise: 341000, canOrder: true, orderBlockers: [], codEligible: true, paymentMethods: ['prepaid', 'cod'] },
+    );
+    const order = {
+      id: 'o1', orderNumber: 'TDA-1001', status: 'placed', paymentMethod: 'cod', paymentStatus: 'cod_due',
+      subtotalPaise: 300000, discountPaise: 0, taxPaise: 36000, deliveryFeePaise: 5000, payablePaise: 341000,
+      paymentDueBy: null, placedAt: '2026-10-20T10:00:00Z', items: [{ ...line, totalPaise: 336000 }],
+      events: [{ kind: 'status', from: null, to: 'placed', note: null, at: '2026-10-20T10:00:00Z' }],
+    };
+    let failOnce = true;
+    const calls = mockApi({
+      'GET /me': () => ({ json: retailerMe }),
+      'GET /cart': () => ({ json: { cart: ready } }),
+      'POST /cart/quote': () => ({ status: 201, json: { quote: { id: 'q1' } } }),
+      'POST /orders': () => {
+        if (failOnce) {
+          failOnce = false;
+          throw new TypeError('network down');
+        }
+        return { status: 201, json: { order } };
+      },
+      'GET /orders/o1': () => ({ json: { order } }),
+    });
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByRole('tab', { name: 'Cart (1)' }));
+    expect((screen.getByLabelText('Cash on delivery') as HTMLInputElement).checked).toBe(true);
+    // No payment provider is live, so online payment is not offered.
+    expect(screen.queryByLabelText('Pay online')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Place order' }));
+    expect(await screen.findByText('Something went wrong. Please try again.')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Place order' }));
+    expect(await screen.findByText('TDA-1001')).toBeTruthy();
+    expect(screen.getByText('Pay cash on delivery')).toBeTruthy();
+    const attempts = calls.filter((c) => c.key === 'POST /orders');
+    expect(attempts).toHaveLength(2);
+    // The retry after a network failure reuses the same quote and key.
+    expect(calls.filter((c) => c.key === 'POST /cart/quote')).toHaveLength(1);
+    expect(attempts[0]!.idem).toBeTruthy();
+    expect(attempts[1]!.idem).toBe(attempts[0]!.idem);
+    expect(attempts[1]!.body).toEqual({ quoteId: 'q1', paymentMethod: 'cod' });
   });
 
   it('switches to Hindi and remembers the choice', async () => {

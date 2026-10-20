@@ -17,6 +17,8 @@ describe('loadConfig', () => {
       sessionTtlDays: 30,
       documentStorage: 'local_disk',
       documentStorageDir: '.data/documents',
+      paymentProvider: 'none',
+      devPaymentWebhookSecret: 'dev-only-payment-webhook-secret',
     });
   });
 
@@ -30,6 +32,9 @@ describe('loadConfig', () => {
       expect(() => loadConfig({ ...base, NODE_ENV })).toThrow(/OTP_PEPPER: required/);
       expect(() => loadConfig({ ...base, NODE_ENV, OTP_PEPPER: 'x'.repeat(40) })).toThrow(/dev_console/);
       expect(() => loadConfig({ ...base, NODE_ENV, OTP_PEPPER: 'x'.repeat(40) })).toThrow(/local_disk/);
+      expect(() => loadConfig({ ...base, NODE_ENV, OTP_PEPPER: 'x'.repeat(40), PAYMENT_PROVIDER: 'dev_fake' })).toThrow(
+        /dev_fake simulates payments/,
+      );
     }
   });
 

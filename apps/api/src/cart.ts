@@ -102,15 +102,14 @@ async function loadDiscountSlabs(db: Queryable): Promise<DiscountSlab[]> {
  * Problem lines are shown with reasons, never silently dropped, and block checkout until fixed.
  */
 export async function priceCart(db: Queryable, accountId: string): Promise<CartPricing> {
-  const [policy, checkoutPolicy, retailer, discountsOn, slabs, coldChainOn, ratesIncludeGst] = await Promise.all([
-    loadAvailabilityPolicy(db),
-    loadCheckoutPolicy(db),
-    loadRetailerContext(db, accountId),
-    discountsEnabled(db),
-    loadDiscountSlabs(db),
-    settingBool(db, 'catalog.cold_chain_enabled'),
-    settingBool(db, 'pricing.rates_include_gst'),
-  ]);
+  // Sequential on purpose: this may run on a single transaction client, which cannot run queries in parallel.
+  const policy = await loadAvailabilityPolicy(db);
+  const checkoutPolicy = await loadCheckoutPolicy(db);
+  const retailer = await loadRetailerContext(db, accountId);
+  const discountsOn = await discountsEnabled(db);
+  const slabs = await loadDiscountSlabs(db);
+  const coldChainOn = await settingBool(db, 'catalog.cold_chain_enabled');
+  const ratesIncludeGst = await settingBool(db, 'pricing.rates_include_gst');
   if (ratesIncludeGst) {
     // Inclusive-rate pricing has not been built; refuse rather than charge GST twice.
     throw new Error('pricing.rates_include_gst=true is not supported yet');

@@ -5,8 +5,9 @@ import { CartView } from './screens/CartView';
 import { Catalog } from './screens/Catalog';
 import { Login } from './screens/Login';
 import { Onboarding } from './screens/Onboarding';
+import { Orders } from './screens/Orders';
 
-type Tab = 'search' | 'cart';
+type Tab = 'search' | 'cart' | 'orders';
 
 export function App() {
   const { t, lang, setLang } = useI18n();
@@ -70,11 +71,14 @@ function Shop() {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>('search');
   const [cart, setCart] = useState<Cart | null>(null);
+  const [onlinePayment, setOnlinePayment] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const res = await api<{ cart: Cart }>('GET', '/cart');
+    const res = await api<{ cart: Cart; onlinePaymentAvailable?: boolean }>('GET', '/cart');
     setCart(res.cart);
+    setOnlinePayment(res.onlinePaymentAvailable === true);
   }, []);
 
   useEffect(() => {
@@ -104,13 +108,34 @@ function Shop() {
           {t('cart')}
           {count > 0 && ` (${count})`}
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'orders'}
+          onClick={() => {
+            setOpenOrderId(null);
+            setTab('orders');
+          }}
+        >
+          {t('orders')}
+        </button>
       </nav>
       {error && <p role="alert" className="error">{error}</p>}
-      {tab === 'search' ? (
-        <Catalog onAdd={setQuantity} inCart={inCart} />
-      ) : (
-        <CartView cart={cart} onSetQuantity={setQuantity} onCleared={() => void refresh()} />
+      {tab === 'search' && <Catalog onAdd={setQuantity} inCart={inCart} />}
+      {tab === 'cart' && (
+        <CartView
+          cart={cart}
+          onlinePayment={onlinePayment}
+          onSetQuantity={setQuantity}
+          onCleared={() => void refresh()}
+          onOrdered={(order) => {
+            void refresh();
+            setOpenOrderId(order.id);
+            setTab('orders');
+          }}
+        />
       )}
+      {tab === 'orders' && <Orders openOrderId={openOrderId} onOpen={setOpenOrderId} />}
     </main>
   );
 }

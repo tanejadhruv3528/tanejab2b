@@ -123,6 +123,8 @@ describe.skipIf(!TEST_DATABASE_URL)('cart and pricing (integration)', () => {
   });
 
   it('starts empty and cannot be checked out', async () => {
+    const res = await app.inject({ method: 'GET', url: '/cart', headers: bearer(retailer.token) });
+    expect(res.json().onlinePaymentAvailable).toBe(false);
     const c = await cart();
     expect(c).toMatchObject({ lines: [], subtotalPaise: 0, canCheckout: false });
     expect(c.checkout.orderBlockers).toContain('EMPTY_CART');
