@@ -1,0 +1,2 @@
+# Prompt 1 — Repository Audit (do not code)
+Read `CLAUDE.md` and all `docs/`. Inspect repository and report stack, routes, backend, auth, database, migrations, deployment, env vars, integrations, tests, reusable code, security issues, and conflicts with requirements. Identify what is blocked by unknown Marg/GoKwik/catalogue APIs. Propose phased plan and exact files for Phase 1. Do not edit files, invent API capabilities, deploy, or make paid changes. Wait for approval.
