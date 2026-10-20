@@ -5,6 +5,7 @@ import type { SmsSender } from './auth/sms.js';
 import type { Db } from './db.js';
 import { registerErrorHandling } from './errors.js';
 import { adminKycRoutes } from './routes/admin-kyc.js';
+import { adminOrderRoutes } from './routes/admin-orders.js';
 import { adminPricingRoutes } from './routes/admin-pricing.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { authRoutes } from './routes/auth.js';
@@ -12,7 +13,10 @@ import { cartRoutes } from './routes/cart.js';
 import { catalogRoutes } from './routes/catalog.js';
 import { healthRoutes } from './routes/health.js';
 import { inventoryRoutes } from './routes/inventory.js';
+import { orderRoutes } from './routes/orders.js';
+import { paymentWebhookRoutes } from './routes/payment-webhooks.js';
 import { retailerRoutes } from './routes/retailer.js';
+import { NoPaymentProvider, type PaymentProvider } from './payments.js';
 import type { DocumentStore } from './storage.js';
 
 export interface AppDeps {
@@ -21,6 +25,8 @@ export interface AppDeps {
   documents: DocumentStore;
   otpPepper: string;
   sessionTtlDays: number;
+  /** Defaults to no provider: prepaid checkout is refused until one is chosen. */
+  payments?: PaymentProvider;
   logger?: FastifyServerOptions['logger'];
 }
 
@@ -57,8 +63,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(adminKycRoutes, { db: deps.db, documents: deps.documents });
   await app.register(catalogRoutes, { db: deps.db });
   await app.register(inventoryRoutes, { db: deps.db });
-  await app.register(cartRoutes, { db: deps.db });
   await app.register(adminPricingRoutes, { db: deps.db });
+  const payments = deps.payments ?? new NoPaymentProvider();
+  await app.register(cartRoutes, { db: deps.db, payments });
+  await app.register(orderRoutes, { db: deps.db, payments });
+  await app.register(paymentWebhookRoutes, { db: deps.db, payments });
+  await app.register(adminOrderRoutes, { db: deps.db });
 
   return app;
 }

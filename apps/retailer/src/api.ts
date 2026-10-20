@@ -35,9 +35,9 @@ export async function api<T>(
   method: string,
   path: string,
   body?: unknown,
-  opts: { contentType?: string } = {},
+  opts: { contentType?: string; headers?: Record<string, string> } = {},
 ): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...opts.headers };
   const token = getToken();
   if (token) headers.authorization = `Bearer ${token}`;
   let payload: BodyInit | undefined;
@@ -141,4 +141,32 @@ export interface Onboarding {
   documents?: { id: string; kind: string }[];
   latestDecision?: { status: string; reason: string | null } | null;
   gaps?: string[];
+}
+
+export interface OrderSummary {
+  id: string;
+  orderNumber: string;
+  status: string;
+  paymentMethod: 'prepaid' | 'cod';
+  paymentStatus: string;
+  payablePaise: number;
+  placedAt: string;
+  itemCount?: number;
+}
+
+export interface Order extends OrderSummary {
+  subtotalPaise: number;
+  discountPaise: number;
+  taxPaise: number;
+  deliveryFeePaise: number;
+  paymentDueBy: string | null;
+  items: { productId: string; sku: string; name: string; packSize: string | null; quantity: number; totalPaise: number }[];
+  events: { kind: 'status' | 'payment'; from: string | null; to: string; note: string | null; at: string }[];
+}
+
+/** One key per checkout attempt, reused on retry so a lost response never creates a second order. */
+export function newIdempotencyKey(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }

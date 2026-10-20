@@ -23,6 +23,9 @@ const envSchema = z.object({
   // Only local disk exists until a private object-storage bucket is chosen.
   DOCUMENT_STORAGE: z.enum(['local_disk']).default('local_disk'),
   DOCUMENT_STORAGE_DIR: z.string().min(1).default('.data/documents'),
+  // The provider is undecided. 'none' refuses prepaid checkout; 'dev_fake' simulates signed webhooks locally.
+  PAYMENT_PROVIDER: z.enum(['none', 'dev_fake']).default('none'),
+  DEV_PAYMENT_WEBHOOK_SECRET: z.string().min(16).default('dev-only-payment-webhook-secret'),
 });
 
 // Fixed value so development and tests work without setup. Never valid outside development/test.
@@ -40,6 +43,8 @@ export type Config = {
   sessionTtlDays: number;
   documentStorage: 'local_disk';
   documentStorageDir: string;
+  paymentProvider: 'none' | 'dev_fake';
+  devPaymentWebhookSecret: string;
 };
 
 export class ConfigError extends Error {
@@ -63,6 +68,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (deployed && e.DOCUMENT_STORAGE === 'local_disk') {
     problems.push('DOCUMENT_STORAGE: local_disk is for development only; KYC files need private object storage');
   }
+  if (deployed && e.PAYMENT_PROVIDER === 'dev_fake') {
+    problems.push('PAYMENT_PROVIDER: dev_fake simulates payments and cannot be used in staging or production');
+  }
   if (problems.length > 0) {
     throw new ConfigError(`Invalid environment configuration:\n  ${problems.join('\n  ')}`);
   }
@@ -78,5 +86,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     sessionTtlDays: e.SESSION_TTL_DAYS,
     documentStorage: e.DOCUMENT_STORAGE,
     documentStorageDir: e.DOCUMENT_STORAGE_DIR,
+    paymentProvider: e.PAYMENT_PROVIDER,
+    devPaymentWebhookSecret: e.DEV_PAYMENT_WEBHOOK_SECRET,
   };
 }
