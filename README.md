@@ -9,7 +9,8 @@ Licensed retailers order from Taneja's warehouse; Taneja is the only fulfilment 
 - Phase 1 (foundation): API skeleton, environment validation, migrations, audit log, structured logging with redaction, stable error codes, health checks, checkout/COD rules and CI.
 - Phase 2 (auth/roles): phone OTP login, sessions, `/me`, the PRD's staff roles, and super-admin user management. SMS is a development stub that prints codes to the server log; staging/production refuse to start until a real SMS/DLT provider is added.
 - Phase 3 (retailer onboarding/KYC): business, store address with map pin, drug licence and GSTIN details; private licence/store-photo uploads; submit for review; reviewer queue, audited document viewing, and decisions (approve, send back, reject, suspend, reinstate). Approval requires a verified store and an unexpired licence, and grants the retailer role for that account. Files are stored on local disk in development only; staging/production refuse to start until a private storage bucket is configured.
-- Phase 4 (catalogue): CSV import from authorised sources only (Marg export, manufacturer/distributor lists, manual entry) with dry-run validation, whole-file rejection on any error, upsert by SKU and import history; typo-tolerant search by brand, salt, manufacturer, strength, SKU and aliases (incl. Hindi); restricted, cold-chain and schedule flags. Stock availability stays `null` until the inventory phase.
+- Phase 4 (catalogue): CSV import from authorised sources only (Marg export, manufacturer/distributor lists, manual entry) with dry-run validation, whole-file rejection on any error, upsert by SKU and import history; typo-tolerant search by brand, salt, manufacturer, strength, SKU and aliases (incl. Hindi); restricted, cold-chain and schedule flags. Search results carry an availability status.
+- Phase 5 (inventory): stock snapshots by batch (expiry, MRP, rate, location) imported as CSV from a Marg export or a manual count; dry run, whole-file rejection, older exports cannot overwrite newer ones, unknown SKUs and oversold batches reported. Availability (in stock / low / out / restricted / discontinued) and last-sync time with a stale flag on every product; exact quantities only for staff. Earliest-expiry-first reservation with row locks so concurrent orders cannot take the same last unit; batches inside the minimum shelf life are not sold. Every movement is logged. The real Marg export column layout still needs a sample file.
 
 No retailer-facing screens yet.
 
@@ -37,8 +38,13 @@ No retailer-facing screens yet.
 | POST | `/admin/catalog/imports?source=&dryRun=` (text/csv body) | catalog_operator, super_admin |
 | GET | `/admin/catalog/imports` | catalog_operator, super_admin |
 | PATCH | `/admin/catalog/products/:id` (status + reason) | catalog_operator, super_admin (audited) |
+| POST | `/admin/inventory/imports?source=&asOf=&dryRun=` (text/csv body) | catalog_operator, super_admin (audited) |
+| GET | `/admin/inventory/imports` | catalog_operator, super_admin |
+| GET | `/admin/inventory/products/:productId` (batches) | warehouse, procurement, support, catalogue staff |
 
 Catalogue CSV columns: `sku,name,manufacturer` required; optional `generic_name,strength,dosage_form,pack_size,hsn_code,gst_rate,mrp,schedule,cold_chain,status,aliases` (aliases separated by `|`).
+
+Stock CSV columns: `sku,batch,expiry,qty` required (expiry as `2027-03-31` or `03/2027`); optional `mrp,rate,location`. Each file is a full snapshot for the products it lists.
 
 Send the token as `Authorization: Bearer <token>`.
 

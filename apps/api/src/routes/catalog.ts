@@ -5,6 +5,7 @@ import { hasRole, requireAuth, requireRole } from '../auth/plugin.js';
 import type { Role } from '../auth/sessions.js';
 import { getProduct, searchProducts, upsertProducts } from '../catalog.js';
 import { withTransaction, type Db } from '../db.js';
+import { loadAvailabilityPolicy } from '../inventory.js';
 import { AppError } from '../errors.js';
 
 const STAFF_CATALOG_READERS: Role[] = [
@@ -54,11 +55,14 @@ export async function catalogRoutes(app: FastifyInstance, opts: { db: Db }): Pro
     async (request) => {
       const auth = requireAuth(request);
       const { q, limit, offset } = request.query;
+      const staff = hasRole(auth, ...STAFF_CATALOG_READERS);
       const items = await searchProducts(db, {
         query: q,
         limit,
         offset,
-        includeDiscontinued: hasRole(auth, ...STAFF_CATALOG_READERS),
+        includeDiscontinued: staff,
+        includeQuantities: staff,
+        policy: await loadAvailabilityPolicy(db),
       });
       return { items, limit, offset };
     },
@@ -72,8 +76,12 @@ export async function catalogRoutes(app: FastifyInstance, opts: { db: Db }): Pro
     },
     async (request) => {
       const auth = requireAuth(request);
-      const product = await getProduct(db, request.params.id);
-      if (!product || (product.status === 'discontinued' && !hasRole(auth, ...STAFF_CATALOG_READERS))) {
+      const staff = hasRole(auth, ...STAFF_CATALOG_READERS);
+      const product = await getProduct(db, request.params.id, {
+        policy: await loadAvailabilityPolicy(db),
+        includeQuantities: staff,
+      });
+      if (!product || (product.status === 'discontinued' && !staff)) {
         throw new AppError('NOT_FOUND', 'Product not found');
       }
       return product;
@@ -214,7 +222,7 @@ export async function catalogRoutes(app: FastifyInstance, opts: { db: Db }): Pro
           ipAddress: request.ip ?? null,
         });
       });
-      return getProduct(db, request.params.id);
+      return getProduct(db, request.params.id, { policy: await loadAvailabilityPolicy(db), includeQuantities: true });
     },
   );
 }

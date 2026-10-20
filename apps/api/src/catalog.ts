@@ -1,6 +1,7 @@
-import type { CatalogRow } from '@taneja/domain';
+import { availabilityFor, isStale, type Availability, type AvailabilityPolicy, type CatalogRow } from '@taneja/domain';
 import type { PoolClient } from 'pg';
 import type { Db } from './db.js';
+import { sellableUnitsSql } from './inventory.js';
 
 type Queryable = Pick<Db, 'query'> | PoolClient;
 
@@ -20,21 +21,49 @@ export interface ProductView {
   coldChain: boolean;
   status: string;
   aliases: string[];
-  /** Stock is not connected yet (inventory phase). Never invent availability. */
-  availability: null;
-  stockSyncedAt: null;
+  availability: Availability;
+  /** When the warehouse stock for this product was last synced; null if never. */
+  stockSyncedAt: string | null;
+  /** True when stock data is older than the configured limit: treat availability as uncertain. */
+  stockStale: boolean;
+  /** Exact sellable units, shown to staff only. */
+  sellableUnits?: number;
+}
+
+interface ProductRow extends Omit<ProductView, 'availability' | 'stockStale' | 'sellableUnits' | 'stockSyncedAt'> {
+  sellableUnits: number;
+  stockSyncedAt: Date | null;
+}
+
+export interface ViewOptions {
+  policy: AvailabilityPolicy;
+  /** Staff see exact quantities; retailers see only the availability status. */
+  includeQuantities: boolean;
+}
+
+function toView(row: ProductRow, opts: ViewOptions): ProductView {
+  const { sellableUnits, stockSyncedAt, ...rest } = row;
+  const view: ProductView = {
+    ...rest,
+    availability: availabilityFor(row.status as 'active' | 'restricted' | 'discontinued', sellableUnits, opts.policy),
+    stockSyncedAt: stockSyncedAt ? stockSyncedAt.toISOString() : null,
+    stockStale: isStale(stockSyncedAt, new Date(), opts.policy),
+  };
+  if (opts.includeQuantities) view.sellableUnits = sellableUnits;
+  return view;
 }
 
 /**
  * Retailer-facing product columns. Supplier and cost data must never be added here; the
  * catalogue tables do not hold any, and procurement tables are never joined into this view.
  */
-const PRODUCT_SELECT = `
+const productSelect = (shelfLifeParam: string) => `
   SELECT p.id, p.sku, p.name, p.generic_name AS "genericName", m.name AS manufacturer, p.strength,
          p.dosage_form AS "dosageForm", p.pack_size AS "packSize", p.mrp_paise::int AS "mrpPaise",
          p.gst_rate_bps AS "gstRateBps", p.hsn_code AS "hsnCode", p.schedule, p.cold_chain AS "coldChain", p.status,
          coalesce((SELECT array_agg(a.alias ORDER BY a.alias) FROM product_aliases a WHERE a.product_id = p.id), '{}') AS aliases,
-         NULL AS availability, NULL AS "stockSyncedAt"
+         ${sellableUnitsSql(shelfLifeParam)} AS "sellableUnits",
+         (SELECT max(b.synced_at) FROM inventory_batches b WHERE b.product_id = p.id) AS "stockSyncedAt"
   FROM products p JOIN manufacturers m ON m.id = p.manufacturer_id`;
 
 function searchText(row: CatalogRow): string {
@@ -123,9 +152,9 @@ export interface SearchOptions {
  * Ranked search over name, generic/salt, manufacturer, strength, form, SKU and aliases.
  * Exact SKU beats name prefix, which beats alias prefix, which beats fuzzy (typo-tolerant) matches.
  */
-export async function searchProducts(db: Queryable, opts: SearchOptions): Promise<ProductView[]> {
+export async function searchProducts(db: Queryable, opts: SearchOptions & ViewOptions): Promise<ProductView[]> {
   const q = opts.query.trim().toLowerCase();
-  const { rows } = await db.query<ProductView>(
+  const { rows } = await db.query<ProductRow>(
     `WITH scored AS (
        SELECT p.id,
          CASE
@@ -140,18 +169,26 @@ export async function searchProducts(db: Queryable, opts: SearchOptions): Promis
        WHERE ($4 OR p.status <> 'discontinued')
          AND (p.search_text LIKE $3 OR $1 <% p.search_text OR lower(p.name) % $1)
      )
-     ${PRODUCT_SELECT}
+     ${productSelect('$7')}
      JOIN scored s ON s.id = p.id
      ORDER BY s.score DESC, p.name ASC
      LIMIT $5 OFFSET $6`,
-    [q, `${escapeLike(q)}%`, `%${escapeLike(q)}%`, opts.includeDiscontinued, opts.limit, opts.offset],
+    [
+      q,
+      `${escapeLike(q)}%`,
+      `%${escapeLike(q)}%`,
+      opts.includeDiscontinued,
+      opts.limit,
+      opts.offset,
+      opts.policy.minShelfLifeDays,
+    ],
   );
-  return rows;
+  return rows.map((row) => toView(row, opts));
 }
 
-export async function getProduct(db: Queryable, id: string): Promise<ProductView | null> {
-  const { rows } = await db.query<ProductView>(`${PRODUCT_SELECT} WHERE p.id = $1`, [id]);
-  return rows[0] ?? null;
+export async function getProduct(db: Queryable, id: string, opts: ViewOptions): Promise<ProductView | null> {
+  const { rows } = await db.query<ProductRow>(`${productSelect('$2')} WHERE p.id = $1`, [id, opts.policy.minShelfLifeDays]);
+  return rows[0] ? toView(rows[0], opts) : null;
 }
 
 function escapeLike(value: string): string {

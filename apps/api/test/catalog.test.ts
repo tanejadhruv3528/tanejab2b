@@ -172,11 +172,13 @@ describe.skipIf(!TEST_DATABASE_URL)('catalogue (integration)', () => {
       expect((await search(operator.token, 'old syrup')).json().items[0].status).toBe('discontinued');
     });
 
-    it('flags restricted and cold-chain products and never claims stock', async () => {
+    it('flags restricted and cold-chain products and shows unsynced stock as stale', async () => {
       const lantus = (await search(retailer.token, 'lantus')).json().items[0];
       expect(lantus).toMatchObject({ status: 'restricted', coldChain: true, schedule: 'H', mrpPaise: 110000 });
-      expect(lantus.availability).toBeNull();
+      expect(lantus.availability).toBe('restricted');
       expect(lantus.stockSyncedAt).toBeNull();
+      expect(lantus.stockStale).toBe(true);
+      expect(lantus.sellableUnits).toBeUndefined();
       const detail = await app.inject({ method: 'GET', url: `/catalog/products/${lantus.id}`, headers: bearer(retailer.token) });
       expect(detail.json().aliases).toEqual(['lantus']);
     });
