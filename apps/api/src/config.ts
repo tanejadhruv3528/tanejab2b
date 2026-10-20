@@ -20,6 +20,9 @@ const envSchema = z.object({
   // Only the clearly labelled development sender exists until a real SMS/DLT provider is chosen.
   SMS_PROVIDER: z.enum(['dev_console']).default('dev_console'),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+  // Only local disk exists until a private object-storage bucket is chosen.
+  DOCUMENT_STORAGE: z.enum(['local_disk']).default('local_disk'),
+  DOCUMENT_STORAGE_DIR: z.string().min(1).default('.data/documents'),
 });
 
 // Fixed value so development and tests work without setup. Never valid outside development/test.
@@ -35,6 +38,8 @@ export type Config = {
   otpPepper: string;
   smsProvider: 'dev_console';
   sessionTtlDays: number;
+  documentStorage: 'local_disk';
+  documentStorageDir: string;
 };
 
 export class ConfigError extends Error {
@@ -55,6 +60,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (deployed && e.SMS_PROVIDER === 'dev_console') {
     problems.push('SMS_PROVIDER: dev_console only prints OTPs to logs and cannot be used in staging or production');
   }
+  if (deployed && e.DOCUMENT_STORAGE === 'local_disk') {
+    problems.push('DOCUMENT_STORAGE: local_disk is for development only; KYC files need private object storage');
+  }
   if (problems.length > 0) {
     throw new ConfigError(`Invalid environment configuration:\n  ${problems.join('\n  ')}`);
   }
@@ -68,5 +76,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     otpPepper: e.OTP_PEPPER ?? DEV_OTP_PEPPER,
     smsProvider: e.SMS_PROVIDER,
     sessionTtlDays: e.SESSION_TTL_DAYS,
+    documentStorage: e.DOCUMENT_STORAGE,
+    documentStorageDir: e.DOCUMENT_STORAGE_DIR,
   };
 }

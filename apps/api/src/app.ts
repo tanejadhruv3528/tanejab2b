@@ -4,13 +4,18 @@ import { registerAuth } from './auth/plugin.js';
 import type { SmsSender } from './auth/sms.js';
 import type { Db } from './db.js';
 import { registerErrorHandling } from './errors.js';
+import { adminKycRoutes } from './routes/admin-kyc.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { authRoutes } from './routes/auth.js';
+import { catalogRoutes } from './routes/catalog.js';
 import { healthRoutes } from './routes/health.js';
+import { retailerRoutes } from './routes/retailer.js';
+import type { DocumentStore } from './storage.js';
 
 export interface AppDeps {
   db: Db;
   sms: SmsSender;
+  documents: DocumentStore;
   otpPepper: string;
   sessionTtlDays: number;
   logger?: FastifyServerOptions['logger'];
@@ -45,6 +50,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     sessionTtlDays: deps.sessionTtlDays,
   });
   await app.register(adminUserRoutes, { db: deps.db });
+  await app.register(retailerRoutes, { db: deps.db, documents: deps.documents });
+  await app.register(adminKycRoutes, { db: deps.db, documents: deps.documents });
+  await app.register(catalogRoutes, { db: deps.db });
 
   return app;
 }

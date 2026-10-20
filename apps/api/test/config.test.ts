@@ -15,6 +15,8 @@ describe('loadConfig', () => {
       otpPepper: expect.any(String),
       smsProvider: 'dev_console',
       sessionTtlDays: 30,
+      documentStorage: 'local_disk',
+      documentStorageDir: '.data/documents',
     });
   });
 
@@ -27,6 +29,7 @@ describe('loadConfig', () => {
     for (const NODE_ENV of ['staging', 'production']) {
       expect(() => loadConfig({ ...base, NODE_ENV })).toThrow(/OTP_PEPPER: required/);
       expect(() => loadConfig({ ...base, NODE_ENV, OTP_PEPPER: 'x'.repeat(40) })).toThrow(/dev_console/);
+      expect(() => loadConfig({ ...base, NODE_ENV, OTP_PEPPER: 'x'.repeat(40) })).toThrow(/local_disk/);
     }
   });
 
