@@ -1,0 +1,10 @@
+{
+  "name": "Taneja Drug Agency",
+  "short_name": "Taneja",
+  "description": "Wholesale medicine ordering for approved pharmacies",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0b6e4f",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
