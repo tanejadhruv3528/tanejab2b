@@ -10,7 +10,11 @@ export type ErrorCode =
   | 'CONFLICT'
   | 'RATE_LIMITED'
   | 'SERVICE_UNAVAILABLE'
-  | 'INTERNAL_ERROR';
+  | 'INTERNAL_ERROR'
+  | 'OTP_INVALID'
+  | 'OTP_EXPIRED'
+  | 'OTP_TOO_MANY_ATTEMPTS'
+  | 'ACCOUNT_DISABLED';
 
 const STATUS_BY_CODE: Record<ErrorCode, number> = {
   BAD_REQUEST: 400,
@@ -22,6 +26,10 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   RATE_LIMITED: 429,
   SERVICE_UNAVAILABLE: 503,
   INTERNAL_ERROR: 500,
+  OTP_INVALID: 400,
+  OTP_EXPIRED: 400,
+  OTP_TOO_MANY_ATTEMPTS: 429,
+  ACCOUNT_DISABLED: 403,
 };
 
 export class AppError extends Error {
