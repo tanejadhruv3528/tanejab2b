@@ -5,3 +5,4 @@ export * from './kyc.js';
 export * from './csv.js';
 export * from './catalog.js';
 export * from './inventory.js';
+export * from './pricing.js';

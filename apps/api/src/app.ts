@@ -5,8 +5,10 @@ import type { SmsSender } from './auth/sms.js';
 import type { Db } from './db.js';
 import { registerErrorHandling } from './errors.js';
 import { adminKycRoutes } from './routes/admin-kyc.js';
+import { adminPricingRoutes } from './routes/admin-pricing.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { authRoutes } from './routes/auth.js';
+import { cartRoutes } from './routes/cart.js';
 import { catalogRoutes } from './routes/catalog.js';
 import { healthRoutes } from './routes/health.js';
 import { inventoryRoutes } from './routes/inventory.js';
@@ -55,6 +57,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(adminKycRoutes, { db: deps.db, documents: deps.documents });
   await app.register(catalogRoutes, { db: deps.db });
   await app.register(inventoryRoutes, { db: deps.db });
+  await app.register(cartRoutes, { db: deps.db });
+  await app.register(adminPricingRoutes, { db: deps.db });
 
   return app;
 }
