@@ -47,7 +47,7 @@ const STAFF_CANCELLABLE: OrderStatus[] = [
   'cancel_requested',
 ];
 
-interface OrderRow {
+export interface OrderRow {
   id: string;
   order_number: string;
   retailer_account_id: string;
@@ -296,7 +296,18 @@ export async function getOrder(db: Queryable, orderId: string, opts: { accountId
       [orderId],
     ),
   ]);
-  const view: Record<string, unknown> = { ...order, items: items.rows, events: events.rows, payments: payments.rows };
+  const invoice = await db.query(
+    `SELECT invoice_number AS "invoiceNumber", amount_paise::int AS "amountPaise", recorded_at AS "recordedAt"
+     FROM order_invoices WHERE order_id = $1`,
+    [orderId],
+  );
+  const view: Record<string, unknown> = {
+    ...order,
+    items: items.rows,
+    events: events.rows,
+    payments: payments.rows,
+    invoice: invoice.rows[0] ?? null,
+  };
   if (opts.staff) {
     const allocations = await db.query(
       `SELECT a.product_id AS "productId", b.batch_number AS "batchNumber", to_char(b.expiry_date, 'YYYY-MM-DD') AS "expiryDate",
@@ -310,7 +321,7 @@ export async function getOrder(db: Queryable, orderId: string, opts: { accountId
   return view;
 }
 
-async function lockOrder(client: PoolClient, orderId: string, accountId?: string): Promise<OrderRow> {
+export async function lockOrder(client: PoolClient, orderId: string, accountId?: string): Promise<OrderRow> {
   const { rows } = await client.query<OrderRow>(
     `SELECT id, order_number, retailer_account_id, status, payment_method, payment_status
      FROM orders WHERE id = $1 AND ($2::uuid IS NULL OR retailer_account_id = $2) FOR UPDATE`,
@@ -320,7 +331,7 @@ async function lockOrder(client: PoolClient, orderId: string, accountId?: string
   return rows[0];
 }
 
-async function setStatus(client: PoolClient, order: OrderRow, to: OrderStatus, actor: string | null, note: string | null) {
+export async function setStatus(client: PoolClient, order: OrderRow, to: OrderStatus, actor: string | null, note: string | null) {
   await client.query('UPDATE orders SET status = $2, updated_at = now() WHERE id = $1', [order.id, to]);
   await addEvent(client, order.id, 'status', order.status, to, actor, note);
 }
@@ -344,6 +355,10 @@ async function cancelLocked(client: PoolClient, order: OrderRow, actor: string |
   await client.query('UPDATE order_allocations SET released_at = now() WHERE order_id = $1 AND released_at IS NULL', [
     order.id,
   ]);
+  await client.query(
+    "UPDATE warehouse_tasks SET status = 'cancelled', updated_at = now() WHERE order_id = $1 AND status <> 'cancelled'",
+    [order.id],
+  );
   await setStatus(client, order, 'cancelled', actor, reason);
   // No money moves here. A paid order is flagged for finance to refund through the provider.
   const nextPayment: PaymentStatus | null =
@@ -385,7 +400,32 @@ export async function acceptOrder(client: PoolClient, orderId: string, actor: st
     throw new AppError('CONFLICT', 'Order is not paid yet');
   }
   await setStatus(client, order, 'accepted', actor, null);
+  // The pick list is the order's live stock reservations, batch by batch.
+  const { rows: tasks } = await client.query<{ id: string }>(
+    'INSERT INTO warehouse_tasks (order_id) VALUES ($1) RETURNING id',
+    [order.id],
+  );
+  await client.query(
+    `INSERT INTO warehouse_pick_lines (task_id, product_id, batch_id, expected_qty)
+     SELECT $1, product_id, batch_id, quantity FROM order_allocations WHERE order_id = $2 AND released_at IS NULL`,
+    [tasks[0]!.id, order.id],
+  );
   return order;
+}
+
+/** Staff turn down a retailer's cancellation request; the order goes back to where it was. */
+export async function declineCancelRequest(client: PoolClient, orderId: string, actor: string, reason: string) {
+  const order = await lockOrder(client, orderId);
+  if (order.status !== 'cancel_requested') throw new AppError('CONFLICT', 'There is no open cancellation request');
+  const { rows } = await client.query<{ from_value: OrderStatus }>(
+    `SELECT from_value FROM order_events WHERE order_id = $1 AND kind = 'status' AND to_value = 'cancel_requested'
+     ORDER BY id DESC LIMIT 1`,
+    [order.id],
+  );
+  const previous = rows[0]?.from_value;
+  if (!previous) throw new AppError('CONFLICT', 'Cannot tell what state the order was in before the request');
+  await setStatus(client, order, previous, actor, `Cancellation declined: ${reason}`);
+  return { order, restored: previous };
 }
 
 /** Cancels prepaid orders left unpaid past their window so their stock goes back on sale. */
