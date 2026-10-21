@@ -20,13 +20,13 @@ export async function loadAvailabilityPolicy(db: Queryable): Promise<Availabilit
 }
 
 /**
- * SQL for sellable units of product `p`: on hand minus reserved and quarantined, only from batches
+ * SQL for sellable units of product `p`: on hand minus reserved and quarantined, only from priced batches
  * with at least `min_shelf_life_days` left (in India's calendar). Parameter $N is min shelf life days.
  */
 export function sellableUnitsSql(shelfLifeParam: string): string {
   return `(SELECT coalesce(sum(greatest(b.on_hand_qty - b.reserved_qty - b.quarantined_qty, 0)), 0)::int
            FROM inventory_batches b
-           WHERE b.product_id = p.id
+           WHERE b.product_id = p.id AND b.rate_paise IS NOT NULL
              AND b.expiry_date > (now() AT TIME ZONE 'Asia/Kolkata')::date + ${shelfLifeParam}::int)`;
 }
 
@@ -140,6 +140,8 @@ export async function reserveStock(
      FROM inventory_batches
      WHERE product_id = $1 AND expiry_date > (now() AT TIME ZONE 'Asia/Kolkata')::date + $2::int
        AND NOT (id = ANY($3::uuid[]))
+       -- Same rule as pricing: a batch without a selling rate is not sold.
+       AND rate_paise IS NOT NULL
      ORDER BY expiry_date, batch_number
      FOR UPDATE`,
     [productId, meta.minShelfLifeDays, meta.excludeBatchIds ?? []],
