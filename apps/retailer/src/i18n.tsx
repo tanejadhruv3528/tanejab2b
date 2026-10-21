@@ -143,6 +143,12 @@ const strings = {
   pay_cod_collected: { en: 'Cash collected', hi: 'नकद प्राप्त' },
   pay_refund_pending: { en: 'Refund pending', hi: 'रिफंड बाकी' },
   pay_not_charged: { en: 'Not charged', hi: 'कोई शुल्क नहीं' },
+  demoBanner: {
+    en: 'Demo with sample data. Nothing is a real order, stock level or payment. Log in with any 10-digit number and OTP 123456 (a number ending 0000 shows pharmacy registration).',
+    hi: 'नमूना डेटा वाला डेमो। कोई असली ऑर्डर, स्टॉक या भुगतान नहीं। किसी भी 10 अंकों के नंबर और OTP 123456 से लॉग इन करें (0000 पर खत्म होने वाला नंबर पंजीकरण दिखाता है)।',
+  },
+  confirmCancelYes: { en: 'Yes, cancel it', hi: 'हाँ, रद्द करें' },
+  keepOrder: { en: 'Keep order', hi: 'ऑर्डर रखें' },
   genericError: { en: 'Something went wrong. Please try again.', hi: 'कुछ गलत हुआ। कृपया फिर कोशिश करें।' },
 } satisfies Record<string, Record<Lang, string>>;
 

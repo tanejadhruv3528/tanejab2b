@@ -84,6 +84,7 @@ npm run db:migrate -w @taneja/api
 npm run user:grant -w @taneja/api -- 9876543210 super_admin   # first admin
 npm run dev -w @taneja/api      # http://localhost:3000/health
 npm run dev -w @taneja/retailer # http://localhost:5173 (proxies /api to the API)
+npm run build:demo -w @taneja/retailer # sample-data demo that runs without the API (dist-demo/)
 ```
 
 In development, OTP codes appear in the server log as `[DEV SMS - NOT SENT]`.
