@@ -15,6 +15,7 @@ import { healthRoutes } from './routes/health.js';
 import { inventoryRoutes } from './routes/inventory.js';
 import { orderRoutes } from './routes/orders.js';
 import { paymentWebhookRoutes } from './routes/payment-webhooks.js';
+import { procurementRoutes } from './routes/procurement.js';
 import { retailerRoutes } from './routes/retailer.js';
 import { warehouseRoutes } from './routes/warehouse.js';
 import { NoPaymentProvider, type PaymentProvider } from './payments.js';
@@ -71,6 +72,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(paymentWebhookRoutes, { db: deps.db, payments });
   await app.register(adminOrderRoutes, { db: deps.db });
   await app.register(warehouseRoutes, { db: deps.db });
+  await app.register(procurementRoutes, { db: deps.db });
 
   return app;
 }

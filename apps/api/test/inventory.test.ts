@@ -119,11 +119,13 @@ describe.skipIf(!TEST_DATABASE_URL)('inventory (integration)', () => {
       `P1,B-LATE,${inDays(500)},40,33.60,26.88,R1`,
       `P1,B-EARLY,${inDays(200)},30,33.60,26.88,R1`,
       `P1,B-SHORT,${inDays(10)},100,33.60,26.88,R1`,
-      `P2,A1,${inDays(300)},4,,,`,
+      `P2,A1,${inDays(300)},4,15.00,12.00,`,
+      // No selling rate yet: counted as stock but not offered for sale.
+      `P3,U1,${inDays(300)},50,,,`,
     ].join('\n');
     const res = await stockImport(csv, `source=marg_export&dryRun=false&asOf=${asOf}`);
     expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ status: 'applied', appliedRows: 4, oversold: [] });
+    expect(res.json()).toMatchObject({ status: 'applied', appliedRows: 5, oversold: [] });
 
     const dolo = await product(retailer.token, 'P1');
     // The batch expiring in 10 days is inside the 30-day minimum shelf life, so only 70 units are sellable.
