@@ -174,6 +174,11 @@ describe.skipIf(!TEST_DATABASE_URL)('delivery and COD collection (integration)',
     // Already assigned: not ready for dispatch any more.
     expect((await post('/dispatch/assignments', dispatcher.token, { orderId: order.id, riderUserId: rider2.userId })).statusCode).toBe(409);
 
+    const riders = (await get('/dispatch/riders', dispatcher.token)).json().items;
+    expect(riders.map((r: { id: string }) => r.id).sort()).toEqual([rider.userId, rider2.userId].sort());
+    expect(riders.find((r: { id: string }) => r.id === rider.userId).liveStops).toBe(1);
+    expect((await get('/dispatch/riders', rider.token)).statusCode).toBe(403);
+
     const stops = (await get('/delivery/assignments', rider.token)).json();
     expect(stops.deliveryWindow).toEqual({ start: '13:00', end: '20:00' });
     expect(stops.items).toEqual([

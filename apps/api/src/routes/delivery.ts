@@ -71,6 +71,17 @@ export async function deliveryRoutes(app: FastifyInstance, opts: { db: Db; sms: 
     },
   );
 
+  app.get('/dispatch/riders', { preHandler: canDispatch }, async () => {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.phone,
+              (SELECT count(*)::int FROM delivery_assignments d
+               WHERE d.rider_user_id = u.id AND d.status IN ('assigned', 'out_for_delivery')) AS "liveStops"
+       FROM users u JOIN user_roles r ON r.user_id = u.id AND r.role = 'rider'
+       WHERE u.status = 'active' ORDER BY u.name NULLS LAST, u.phone`,
+    );
+    return { items: rows };
+  });
+
   app.post<{ Body: { orderId: string; riderUserId: string } }>(
     '/dispatch/assignments',
     {
