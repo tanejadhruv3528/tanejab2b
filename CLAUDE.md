@@ -26,11 +26,12 @@ Build a secure B2B ordering and distribution platform for Taneja Drug Agency. Re
 ## Repo layout
 - `apps/api`: Fastify + TypeScript HTTP API, PostgreSQL via `pg`, plain SQL migrations in `apps/api/migrations`.
 - `apps/retailer`: React + Vite retailer PWA (English/Hindi); talks to the API via `/api`.
+- `apps/staff`: React + Vite staff console and rider screens; menu by role, roles enforced by the API.
 - `packages/domain`: pure business rules (money in paise, checkout/COD rules). No I/O.
 - `docs/spec`: the owner's spec pack (PRD, architecture, data model, API/security tests, open decisions).
 - `prompts`: phased build prompts.
 
 ## Commands
 - `npm install`, `npm run typecheck`, `npm test`
-- `npm run db:migrate -w @taneja/api`, `npm run dev -w @taneja/api`, `npm run dev -w @taneja/retailer`
+- `npm run db:migrate -w @taneja/api`, `npm run dev -w @taneja/api`, `npm run dev -w @taneja/retailer`, `npm run dev -w @taneja/staff`
 - `npm run user:grant -w @taneja/api -- <mobile> <role>` to bootstrap staff roles
