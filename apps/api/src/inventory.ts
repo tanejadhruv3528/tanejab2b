@@ -126,7 +126,7 @@ export async function reserveStock(
   client: PoolClient,
   productId: string,
   quantity: number,
-  meta: { reference: string; actorUserId: string | null; minShelfLifeDays: number },
+  meta: { reference: string; actorUserId: string | null; minShelfLifeDays: number; excludeBatchIds?: string[] },
 ): Promise<ReservationLine[]> {
   if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new AppError('BAD_REQUEST', 'Quantity must be positive');
   const { rows: batches } = await client.query<{
@@ -139,9 +139,10 @@ export async function reserveStock(
             on_hand_qty - reserved_qty - quarantined_qty AS free
      FROM inventory_batches
      WHERE product_id = $1 AND expiry_date > (now() AT TIME ZONE 'Asia/Kolkata')::date + $2::int
+       AND NOT (id = ANY($3::uuid[]))
      ORDER BY expiry_date, batch_number
      FOR UPDATE`,
-    [productId, meta.minShelfLifeDays],
+    [productId, meta.minShelfLifeDays, meta.excludeBatchIds ?? []],
   );
   const available = batches.reduce((sum, b) => sum + Math.max(b.free, 0), 0);
   if (available < quantity) {
@@ -182,6 +183,75 @@ export async function releaseStock(
     if (result.rowCount === 0) throw new AppError('CONFLICT', 'Release exceeds reserved quantity');
     await client.query(
       "INSERT INTO inventory_movements (batch_id, kind, quantity, reference, actor_user_id) VALUES ($1, 'release', $2, $3, $4)",
+      [line.batchId, -line.quantity, meta.reference, meta.actorUserId],
+    );
+  }
+}
+
+/** Units reserved for an order that the picker could not find or use: no longer reserved, held off sale. */
+export async function quarantineReserved(
+  client: PoolClient,
+  batchId: string,
+  quantity: number,
+  meta: { reference: string; actorUserId: string },
+): Promise<void> {
+  const result = await client.query(
+    `UPDATE inventory_batches SET reserved_qty = reserved_qty - $2, quarantined_qty = quarantined_qty + $2, updated_at = now()
+     WHERE id = $1 AND reserved_qty >= $2`,
+    [batchId, quantity],
+  );
+  if (result.rowCount === 0) throw new AppError('CONFLICT', 'Quarantine exceeds reserved quantity');
+  await client.query(
+    "INSERT INTO inventory_movements (batch_id, kind, quantity, reference, actor_user_id) VALUES ($1, 'quarantine', $2, $3, $4)",
+    [batchId, quantity, meta.reference, meta.actorUserId],
+  );
+}
+
+/** Puts quarantined units back on sale after a stock check finds them usable. */
+export async function releaseQuarantine(
+  client: PoolClient,
+  batchId: string,
+  quantity: number,
+  meta: { reference: string; actorUserId: string },
+): Promise<{ before: number; after: number }> {
+  const { rows } = await client.query<{ quarantined_qty: number }>(
+    'SELECT quarantined_qty FROM inventory_batches WHERE id = $1 FOR UPDATE',
+    [batchId],
+  );
+  if (!rows[0]) throw new AppError('NOT_FOUND', 'Batch not found');
+  const before = rows[0].quarantined_qty;
+  if (quantity > before) throw new AppError('CONFLICT', `Only ${before} units are quarantined in this batch`);
+  await client.query('UPDATE inventory_batches SET quarantined_qty = quarantined_qty - $2, updated_at = now() WHERE id = $1', [
+    batchId,
+    quantity,
+  ]);
+  await client.query(
+    "INSERT INTO inventory_movements (batch_id, kind, quantity, reference, actor_user_id) VALUES ($1, 'unquarantine', $2, $3, $4)",
+    [batchId, -quantity, meta.reference, meta.actorUserId],
+  );
+  return { before, after: before - quantity };
+}
+
+/**
+ * Invoiced units leave the warehouse: they stop being reserved and stop counting as on hand.
+ * On-hand never goes below zero, because a Marg snapshot taken after the invoice may already exclude them;
+ * the next snapshot sets the true figure either way.
+ */
+export async function consumeReserved(
+  client: PoolClient,
+  lines: { batchId: string; quantity: number }[],
+  meta: { reference: string; actorUserId: string },
+): Promise<void> {
+  for (const line of [...lines].sort((a, b) => a.batchId.localeCompare(b.batchId))) {
+    const result = await client.query(
+      `UPDATE inventory_batches
+       SET reserved_qty = reserved_qty - $2, on_hand_qty = greatest(on_hand_qty - $2, 0), updated_at = now()
+       WHERE id = $1 AND reserved_qty >= $2`,
+      [line.batchId, line.quantity],
+    );
+    if (result.rowCount === 0) throw new AppError('CONFLICT', 'Invoice exceeds reserved quantity');
+    await client.query(
+      "INSERT INTO inventory_movements (batch_id, kind, quantity, reference, actor_user_id) VALUES ($1, 'invoice', $2, $3, $4)",
       [line.batchId, -line.quantity, meta.reference, meta.actorUserId],
     );
   }

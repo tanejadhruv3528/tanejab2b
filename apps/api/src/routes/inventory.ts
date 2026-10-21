@@ -4,7 +4,7 @@ import { writeAudit } from '../audit.js';
 import { hasRole, requireAuth, requireRole } from '../auth/plugin.js';
 import { withTransaction, type Db } from '../db.js';
 import { AppError } from '../errors.js';
-import { applyStockSnapshot, type SnapshotResult } from '../inventory.js';
+import { applyStockSnapshot, releaseQuarantine, type SnapshotResult } from '../inventory.js';
 
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 
@@ -144,6 +144,49 @@ export async function inventoryRoutes(app: FastifyInstance, opts: { db: Db }): P
         [request.params.productId],
       );
       return { productId: request.params.productId, batches: rows };
+    },
+  );
+
+  // After a stock check, put quarantined units (e.g. from a short pick) back on sale.
+  app.post<{ Params: { batchId: string }; Body: { quantity: number; reason: string } }>(
+    '/admin/inventory/batches/:batchId/quarantine/release',
+    {
+      preHandler: canSync,
+      schema: {
+        params: { type: 'object', required: ['batchId'], properties: { batchId: { type: 'string', format: 'uuid' } } },
+        body: {
+          type: 'object',
+          required: ['quantity', 'reason'],
+          additionalProperties: false,
+          properties: {
+            quantity: { type: 'integer', minimum: 1, maximum: 1_000_000 },
+            reason: { type: 'string', minLength: 3, maxLength: 500 },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const auth = requireAuth(request);
+      const { batchId } = request.params;
+      const result = await withTransaction(db, async (client) => {
+        const change = await releaseQuarantine(client, batchId, request.body.quantity, {
+          reference: `stock-check:${request.id}`,
+          actorUserId: auth.user.id,
+        });
+        await writeAudit(client, {
+          actorUserId: auth.user.id,
+          action: 'inventory.quarantine_release',
+          entityType: 'inventory_batch',
+          entityId: batchId,
+          before: { quarantined: change.before },
+          after: { quarantined: change.after },
+          reason: request.body.reason,
+          requestId: request.id,
+          ipAddress: request.ip,
+        });
+        return change;
+      });
+      return { batchId, quarantined: result.after };
     },
   );
 }
