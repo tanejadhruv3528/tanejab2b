@@ -62,3 +62,4 @@ button.link { background: none; color: var(--brand); padding: 4px; min-height: 0
 .history { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .badge.st-cancelled, .badge.st-delivery_failed { background: #fee4e2; color: var(--danger); }
 .badge.st-delivered { background: #dcfae6; color: #067647; }
+.demo-banner { margin: 0; padding: 10px 16px; background: #fef0c7; color: #7a4a00; font-size: 13px; }

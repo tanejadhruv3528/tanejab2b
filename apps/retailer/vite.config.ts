@@ -5,6 +5,11 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [react()],
   resolve: { conditions: ['source'] },
+  build: {
+    target: 'es2022',
+    // The demo build is published as one self-contained page, so keep it to a single script.
+    ...(process.env.VITE_DEMO === 'true' ? { rollupOptions: { output: { inlineDynamicImports: true } } } : {}),
+  },
   server: {
     port: 5173,
     proxy: { '/api': { target: 'http://localhost:3000', rewrite: (path) => path.replace(/^\/api/, '') } },

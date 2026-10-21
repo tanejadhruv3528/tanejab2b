@@ -43,6 +43,7 @@ function OrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { t, lang } = useI18n();
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const load = useCallback(() => api<{ order: Order }>('GET', `/orders/${id}`).then((r) => setOrder(r.order)), [id]);
   useEffect(() => {
@@ -50,7 +51,7 @@ function OrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
   }, [load, t]);
 
   const cancel = async () => {
-    if (!window.confirm(t('confirmCancel'))) return;
+    setConfirming(false);
     try {
       const res = await api<{ order: Order }>('POST', `/orders/${id}/cancel-request`, {});
       setOrder(res.order);
@@ -116,9 +117,21 @@ function OrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
         </ul>
       </div>
       {(RETAILER_CANCEL.has(order.status) || RETAILER_REQUEST_CANCEL.has(order.status)) && (
-        <button type="button" className="secondary" onClick={() => void cancel()}>
-          {RETAILER_CANCEL.has(order.status) ? t('cancelOrder') : t('requestCancel')}
-        </button>
+        confirming ? (
+          <div className="card confirm">
+            <p>{t('confirmCancel')}</p>
+            <button type="button" onClick={() => void cancel()}>
+              {t('confirmCancelYes')}
+            </button>
+            <button type="button" className="secondary" onClick={() => setConfirming(false)}>
+              {t('keepOrder')}
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="secondary" onClick={() => setConfirming(true)}>
+            {RETAILER_CANCEL.has(order.status) ? t('cancelOrder') : t('requestCancel')}
+          </button>
+        )
       )}
       {error && <p role="alert" className="error">{error}</p>}
     </section>

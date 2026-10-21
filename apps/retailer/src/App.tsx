@@ -56,6 +56,11 @@ export function App() {
           )}
         </div>
       </header>
+      {import.meta.env.VITE_DEMO === 'true' && (
+        <p className="demo-banner">
+          {t('demoBanner')}
+        </p>
+      )}
       {loading ? null : !me ? (
         <Login onLoggedIn={() => void loadMe()} />
       ) : isRetailer ? (
