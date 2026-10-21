@@ -18,6 +18,7 @@ import { orderRoutes } from './routes/orders.js';
 import { paymentWebhookRoutes } from './routes/payment-webhooks.js';
 import { procurementRoutes } from './routes/procurement.js';
 import { retailerRoutes } from './routes/retailer.js';
+import { returnRoutes } from './routes/returns.js';
 import { warehouseRoutes } from './routes/warehouse.js';
 import { NoPaymentProvider, type PaymentProvider } from './payments.js';
 import type { DocumentStore } from './storage.js';
@@ -74,6 +75,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(adminOrderRoutes, { db: deps.db });
   await app.register(warehouseRoutes, { db: deps.db });
   await app.register(procurementRoutes, { db: deps.db });
+  await app.register(returnRoutes, { db: deps.db, documents: deps.documents });
   await app.register(deliveryRoutes, { db: deps.db, sms: deps.sms, otpPepper: deps.otpPepper });
 
   return app;
