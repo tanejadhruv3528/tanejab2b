@@ -11,6 +11,7 @@ import { adminUserRoutes } from './routes/admin-users.js';
 import { authRoutes } from './routes/auth.js';
 import { cartRoutes } from './routes/cart.js';
 import { catalogRoutes } from './routes/catalog.js';
+import { deliveryRoutes } from './routes/delivery.js';
 import { healthRoutes } from './routes/health.js';
 import { inventoryRoutes } from './routes/inventory.js';
 import { orderRoutes } from './routes/orders.js';
@@ -73,6 +74,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(adminOrderRoutes, { db: deps.db });
   await app.register(warehouseRoutes, { db: deps.db });
   await app.register(procurementRoutes, { db: deps.db });
+  await app.register(deliveryRoutes, { db: deps.db, sms: deps.sms, otpPepper: deps.otpPepper });
 
   return app;
 }
